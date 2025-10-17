@@ -1,5 +1,5 @@
 -- ==========================================================
---        SCRIPT AUTO-FARM "TÀNG HÌNH" (PHIÊN BẢN ỔN ĐỊNH CUỐI CÙNG)
+--        SCRIPT AUTO-FARM "TÀNG HÌNH" (PHIÊN BẢN CUỐI CÙNG)
 --        Author: Darcy & Gemini
 --        Last Updated: 17/10/2025
 -- ==========================================================
@@ -35,7 +35,7 @@ while _G.DarcyFarmIsRunning do
     elseif currentPlaceId == MATCH_PLACE_ID and not farmState.InMatch then
         farmState.InMatch = true
         print("⚔️ Đã vào trận. Bắt đầu VÒNG LẶP FARM NỘI BỘ.")
-        print("⏳ Chờ 20 giây để game ổn định...")
+        print("⏳ Chờ 20 giây để game ổn định và tải toàn bộ GUI...")
         wait(20)
         
         while currentPlaceId == MATCH_PLACE_ID and _G.DarcyFarmIsRunning do
@@ -50,57 +50,61 @@ while _G.DarcyFarmIsRunning do
                 end)
             end)
             
-            print("⏳ Chờ 3 giây sau khi vote Yes...")
             wait(3)
 
             -- ====================================================================================
-            --        <<< BẮT ĐẦU KHỐI LOGIC ĐẶT & NÂNG CẤP UNIT BẠN CUNG CẤP >>>
+            --        <<< BẮT ĐẦU KHỐI LOGIC ĐẶT & NÂNG CẤP UNIT (SỬA LỖI ID ĐỘNG) >>>
             -- ====================================================================================
             do
                 local unitState = { isRokuPlaced = false, isAckerPlaced = false, ackerUpgradeLevel = 0 }
+                local ACKER_INSTANCE = nil -- Biến này sẽ lưu unit Acker thật sự
                 local ROKU_COST = 400; local ACKER_COST = 1000
                 local ACKER_UPGRADES = { [1] = 2400, [2] = 3600, [3] = 5200 }
                 local ROKU_POSITION = Vector3.new(431.536, 4.840, -358.474)
                 local ACKER_POSITION = Vector3.new(445.913, 3.529, -345.790)
-                local ACKER_INSTANCE_ID = "285ec435-1558-4919-ad60-ec7a6449ba86"
                 local UnitEvent = game:GetService("ReplicatedStorage").Networking.UnitEvent
-                local function getCurrentMoney() local moneyAmount = 0; pcall(function() local moneyLabel = game:GetService("Players").LocalPlayer.PlayerGui.Hotbar.Main.Yen; local numberString = string.gsub(moneyLabel.Text, "[^%d]", ""); moneyAmount = tonumber(numberString) or 0 end); return moneyAmount end
-                local function placeUnit(unitName, unitId, position) pcall(function() UnitEvent:FireServer("Render", {unitName, unitId, position, 0}); print(string.format("✅ Đã gửi yêu cầu đặt: %s", unitName)) end) end
-                local function upgradeAcker() pcall(function() UnitEvent:FireServer("Upgrade", ACKER_INSTANCE_ID); print("🚀 Đã gửi yêu cầu nâng cấp Acker!") end) end
                 
+                local function getCurrentMoney() local moneyAmount=0; pcall(function() local lbl=game:GetService("Players").LocalPlayer.PlayerGui.Hotbar.Main.Yen; local str=string.gsub(lbl.Text,"[^%d]",""); moneyAmount=tonumber(str) or 0 end); return moneyAmount end
+                
+                -- HÀM "SĂN" UNIT ĐÃ ĐƯỢC CẬP NHẬT
+                local function getUnitInstanceAtPosition(position)
+                    print("🎯 Đang 'săn' unit tại vị trí:", position)
+                    local unitsFolder = workspace:FindFirstChild("Units") -- << SỬ DỤNG ĐÚNG PATH BẠN CUNG CẤP
+                    if not unitsFolder then warn("⚠️ Không tìm thấy thư mục 'Units' trong workspace!"); return nil end
+                    for _, unit in ipairs(unitsFolder:GetChildren()) do
+                        local unitRoot = unit:FindFirstChild("HumanoidRootPart") or unit.PrimaryPart
+                        if unitRoot and (unitRoot.Position - position).Magnitude < 1 then
+                            print("✅ Đã tìm thấy unit! ID mới là:", unit.Name); return unit
+                        end
+                    end
+                    warn("⚠️ Không tìm thấy unit nào tại vị trí đã chỉ định."); return nil
+                end
+
                 while unitState.ackerUpgradeLevel < 3 and _G.DarcyFarmIsRunning do
                     local currentMoney = getCurrentMoney()
                     if not unitState.isRokuPlaced and currentMoney >= ROKU_COST then
-                        print(string.format("💰 Đủ tiền (%d/%d). Đang đặt Roku...", currentMoney, ROKU_COST))
-                        placeUnit("Roku", 41, ROKU_POSITION); unitState.isRokuPlaced = true
+                        print(string.format("💰 Đủ tiền (%d/%d). Đặt Roku...", currentMoney, ROKU_COST))
+                        UnitEvent:FireServer("Render", {"Roku", 41, ROKU_POSITION, 0}); unitState.isRokuPlaced = true
                     elseif unitState.isRokuPlaced and not unitState.isAckerPlaced and currentMoney >= ACKER_COST then
-                        print(string.format("💰 Đủ tiền (%d/%d). Đang đặt Acker...", currentMoney, ACKER_COST))
-                        placeUnit("Ackers", 241, ACKER_POSITION); unitState.isAckerPlaced = true
-                    elseif unitState.isAckerPlaced and unitState.ackerUpgradeLevel < 3 then
+                        print(string.format("💰 Đủ tiền (%d/%d). Đặt Acker...", currentMoney, ACKER_COST))
+                        UnitEvent:FireServer("Render", {"Ackers", 241, ACKER_POSITION, 0}); unitState.isAckerPlaced = true
+                        wait(1.5) -- Chờ unit xuất hiện
+                        ACKER_INSTANCE = getUnitInstanceAtPosition(ACKER_POSITION) -- "Săn" ID ngay lập tức
+                    elseif ACKER_INSTANCE and unitState.ackerUpgradeLevel < 3 then
                         local nextUpgradeLevel = unitState.ackerUpgradeLevel + 1
                         local upgradeCost = ACKER_UPGRADES[nextUpgradeLevel]
                         if currentMoney >= upgradeCost then
-                            print(string.format("💰 Đủ tiền (%d/%d). Đang nâng cấp Acker lên level %d...", currentMoney, upgradeCost, nextUpgradeLevel))
-                            upgradeAcker(); unitState.ackerUpgradeLevel = nextUpgradeLevel
+                            print(string.format("💰 Đủ tiền (%d/%d). Nâng cấp Acker (ID: %s)...", currentMoney, upgradeCost, ACKER_INSTANCE.Name))
+                            UnitEvent:FireServer("Upgrade", ACKER_INSTANCE.Name); unitState.ackerUpgradeLevel = nextUpgradeLevel
                         end
                     end
                     wait(0.5)
                 end
-                
-                if not _G.DarcyFarmIsRunning then
-                    print("⏹️ Script đã dừng theo lệnh trong lúc farm.")
-                else
-                    print("✅ Hoàn thành quy trình đặt và nâng cấp unit.")
-                end
+                print("✅ Hoàn thành quy trình đặt và nâng cấp unit.")
             end
-            -- ====================================================================================
-            --        <<< KẾT THÚC KHỐI LOGIC BẠN CUNG CẤP >>>
-            -- ====================================================================================
             
-            -- >> LOGIC CHỜ ENDSCREEN VÀ RETRY VÀO ĐÂY <<
-            -- ...
-            
-            break -- Thoát khỏi vòng lặp trong trận để bắt đầu lại từ đầu
+            -- >> LOGIC CHỜ ENDSCREEN VÀ RETRY SẼ NẰM Ở ĐÂY <<
+            break
         end
         print("🚪 Đã thoát khỏi vòng lặp farm nội bộ."); farmState.LobbyAction = "NeedsToCreate"
     end
