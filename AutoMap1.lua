@@ -1,5 +1,5 @@
 -- ==========================================================
---        SCRIPT AUTO-FARM "TÀNG HÌNH" (PHIÊN BẢN HOÀN THIỆN NHẤT)
+--        SCRIPT AUTO-FARM "TÀNG HÌNH" (LOGIC "LAI" THÔNG MINH)
 --        Author: Darcy & Gemini
 --        Last Updated: 17/10/2025
 -- ==========================================================
@@ -12,42 +12,6 @@ _G.DarcyFarmIsRunning = true
 -- //////////////// KHỞI TẠO TRẠNG THÁI VÀ CÁC HÀM ////////////////
 local farmState = { LobbyAction = "NeedsToCreate", InMatch = false }
 local function waitgameisloaded() print("⏳ Chờ game tải..."); if not game:IsLoaded() then game.Loaded:Wait() end; wait(3); print("✅ Game đã tải!") end
-
--- <<< HÀM TỰ ĐỘNG KIỂM TRA VÀ BẬT CÀI ĐẶT >>>
-local function enableAllSettings()
-    print("-----------------------------------")
-    print("⚙️ Bắt đầu kiểm tra và kích hoạt cài đặt...")
-    local success, err = pcall(function()
-        -- >> BẠN CẦN DÙNG DEX EXPLORER ĐỂ TÌM ĐƯỜNG DẪN CHÍNH XÁC ĐẾN THƯ MỤC NÀY << --
-        local settingsFolder = game:GetService("Players").LocalPlayer.PlayerGui.Settings.Holder.Gameplay
-        
-        local settingsToEnable = {
-            ["Auto Skip Waves"] = "AutoSkipWaves", ["Select Unit on Placement"] = "SelectUnitOnPlacement",
-            ["Show Multipliers on Hover"] = "ShowMultipliersOnHover", ["Disable Match End Rewards View"] = "DisableMatchEndRewardsView",
-            ["Show Max Range on Placement"] = "ShowMaxRangeOnPlacement", ["Low Detail Mode"] = "LowDetailMode",
-            ["Disable Camera Shake"] = "DisableCameraShake", ["Disable Depth of Field"] = "DisableDepthOfField",
-            ["Hide Familiars"] = "HideFamiliars"
-        }
-        local SettingsEvent = game:GetService("ReplicatedStorage").Networking.Settings.SettingsEvent
-        for guiName, remoteName in pairs(settingsToEnable) do
-            local mainButton = settingsFolder:FindFirstChild(guiName)
-            if mainButton then
-                if mainButton.GuiState ~= Enum.GuiState.Idle then
-                    print("❌ Cài đặt '" .. guiName .. "' đang TẮT. Đang bật...")
-                    SettingsEvent:FireServer("Toggle", remoteName)
-                else
-                    print("✅ Cài đặt '" .. guiName .. "' đã BẬT.")
-                end
-            else
-                warn("⚠️ Không tìm thấy nút cài đặt: '" .. guiName .. "'")
-            end
-            wait(0.2)
-        end
-    end)
-    if not success then warn("‼️ Lỗi khi bật cài đặt. Có thể đường dẫn đến Settings GUI đã thay đổi. Lỗi:", err) end
-    print("⚙️ Hoàn thành kiểm tra cài đặt.")
-end
-
 local LOBBY_PLACE_ID = 16146832113; local MATCH_PLACE_ID = 16277809958
 print("🟢 Script 'Tàng Hình' đã kích hoạt!"); waitgameisloaded()
 
@@ -66,8 +30,8 @@ while _G.DarcyFarmIsRunning do
         farmState.InMatch = true
         print("⚔️ Đã vào trận. Bắt đầu VÒNG LẶP FARM VÔ HẠN.")
         
-        -- GỌI HÀM BẬT CÀI ĐẶT (CHỈ 1 LẦN KHI VÀO TRẬN)
-        enableAllSettings()
+        -- BIẾN "TRÍ NHỚ": Đánh dấu xem đã qua lượt chơi đầu tiên chưa
+        local hasCompletedFirstRun = false
         
         print("⏳ Chờ 20 giây để game ổn định...")
         wait(20)
@@ -88,17 +52,34 @@ while _G.DarcyFarmIsRunning do
                     elseif ACKER_INSTANCE and unitState.ackerUpgradeLevel < 3 then
                         local nextUpgradeLevel = unitState.ackerUpgradeLevel + 1; local upgradeCost = ACKER_UPGRADES[nextUpgradeLevel]
                         if currentMoney >= upgradeCost then print(string.format("💰 Đủ tiền (%d/%d). Nâng cấp Acker (ID: %s)...", currentMoney, upgradeCost, ACKER_INSTANCE.Name)); UnitEvent:FireServer("Upgrade", ACKER_INSTANCE.Name); unitState.ackerUpgradeLevel = nextUpgradeLevel end
-                    end
-                    wait(0.5); currentPlaceId = game.PlaceId
+                    end; wait(0.5); currentPlaceId = game.PlaceId
                 end; print("✅ Hoàn thành quy trình đặt và nâng cấp unit.")
             end
             
-            print("⏳ Chờ màn hình nhận thưởng (RewardsDisplay) để retry...")
-            local rewardsDisplay = game.Players.LocalPlayer.PlayerGui:WaitForChild("RewardsDisplay", 1200)
-            if rewardsDisplay and rewardsDisplay.Parent and _G.DarcyFarmIsRunning then
-                print("🏆 Phát hiện RewardsDisplay! Gửi lệnh Retry ngay lập tức..."); wait(1)
-                pcall(function() game:GetService("ReplicatedStorage").Networking.EndScreen.VoteEvent:FireServer("Retry"); print("🔄 Đã gửi yêu cầu 'Retry'!") end); wait(5)
-            else print("❌ Không tìm thấy màn hình thưởng hoặc script đã bị dừng."); break end
+            -- BƯỚC 4: XỬ LÝ CUỐI TRẬN (LOGIC "LAI")
+            if not hasCompletedFirstRun then
+                -- LƯỢT CHƠI ĐẦU TIÊN: Chờ RewardsDisplay
+                print("⏳ (Lượt đầu) Chờ màn hình nhận thưởng (RewardsDisplay) để retry...")
+                local rewardsDisplay = game.Players.LocalPlayer.PlayerGui:WaitForChild("RewardsDisplay", 1200)
+                if rewardsDisplay and rewardsDisplay.Parent and _G.DarcyFarmIsRunning then
+                    print("🏆 (Lượt đầu) Phát hiện RewardsDisplay! Gửi lệnh Retry..."); wait(1)
+                    pcall(function() game:GetService("ReplicatedStorage").Networking.EndScreen.VoteEvent:FireServer("Retry"); print("🔄 Đã gửi yêu cầu 'Retry'!") end)
+                    hasCompletedFirstRun = true -- ĐÁNH DẤU LÀ ĐÃ QUA LƯỢT ĐẦU
+                    wait(5)
+                else print("❌ Không tìm thấy màn hình thưởng. Thoát vòng lặp."); break end
+            else
+                -- CÁC LƯỢT CHƠI SAU: Chờ EndScreen
+                print("⏳ (Lượt sau) Bỏ qua RewardsDisplay, chờ thẳng EndScreen...")
+                local endScreenGui; while _G.DarcyFarmIsRunning and not (endScreenGui and endScreenGui.Parent) do endScreenGui = game.Players.LocalPlayer.PlayerGui:FindFirstChild("EndScreen"); wait(0.5) end
+                if _G.DarcyFarmIsRunning and endScreenGui then
+                    print("✅ (Lượt sau) Đã phát hiện EndScreen!")
+                    local holder = endScreenGui:FindFirstChild("Holder"); if holder and holder:FindFirstChild("Buttons") and holder.Buttons:FindFirstChild("Retry") then
+                        print("✅ Đã tìm thấy nút Retry! Chuẩn bị chơi lại..."); wait(3)
+                        pcall(function() game:GetService("ReplicatedStorage").Networking.EndScreen.VoteEvent:FireServer("Retry"); print("🔄 Đã gửi yêu cầu 'Retry'!") end); wait(5)
+                    else print("❌ Không tìm thấy nút Retry. Thoát vòng lặp."); break end
+                else print("❌ Không tìm thấy EndScreen. Thoát vòng lặp."); break end
+            end
+            currentPlaceId = game.PlaceId
         end
         print("🚪 Đã thoát khỏi vòng lặp farm nội bộ."); farmState.LobbyAction = "NeedsToCreate"
     end
