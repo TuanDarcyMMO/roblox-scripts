@@ -1,139 +1,122 @@
 -- ==========================================================
---        SCRIPT AUTO-FARM (GUI LOG NHẸ)
+--        SCRIPT AUTO-FARM "Tàng Hình" (REJOIN LOGIC - FINAL VERSION)
 --        Author: Darcy & Gemini
 --        Last Updated: 18/10/2025
 -- ==========================================================
 
 -- //////////////// KIỂM TRA VÀ DỪNG SCRIPT CŨ ////////////////
-if _G.DarcyFarmControl and typeof(_G.DarcyFarmControl) == "table" then
-    _G.DarcyFarmControl.State = "Stopped"
-    if _G.DarcyFarmControl.GUI and _G.DarcyFarmControl.GUI.Parent then _G.DarcyFarmControl.GUI:Destroy() end
-    wait(0.5)
-end
-_G.DarcyFarmControl = { State = "Running", MaxLogs = 15 } -- Giảm số log tối đa cho gọn
+if _G.DarcyFarmIsRunning then print("🔴 Dừng script cũ..."); _G.DarcyFarmIsRunning = false; wait(1) end
+_G.DarcyFarmIsRunning = true
 -------------------------------------------------------------
 
--- //////////////// KHỞI TẠO GUI LOG ////////////////
-local controlGui = Instance.new("ScreenGui")
-controlGui.Name = "DarcyFarmLogGUI"
-controlGui.Parent = game:GetService("Players").LocalPlayer.PlayerGui
-_G.DarcyFarmControl.GUI = controlGui
-
-local mainFrame = Instance.new("Frame", controlGui)
-mainFrame.Size = UDim2.new(0, 250, 0, 150) -- Kích thước nhỏ gọn hơn
-mainFrame.Position = UDim2.new(0, 10, 0.5, -75) -- Đặt ở góc trái giữa màn hình
-mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-mainFrame.BackgroundTransparency = 0.2
-mainFrame.BorderSizePixel = 0
-local corner = Instance.new("UICorner", mainFrame); corner.CornerRadius = UDim.new(0, 6)
-
-local titleLabel = Instance.new("TextLabel", mainFrame)
-titleLabel.Size = UDim2.new(1, 0, 0, 20)
-titleLabel.Text = "🚀 Darcy Farm Status"
-titleLabel.TextColor3 = Color3.fromRGB(200, 200, 255)
-titleLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-titleLabel.BackgroundTransparency = 0.1
-titleLabel.Font = Enum.Font.SourceSansSemibold
-titleLabel.TextSize = 14
-local titleCorner = Instance.new("UICorner", titleLabel); titleCorner.CornerRadius = UDim.new(0, 6)
-
-local logFrame = Instance.new("ScrollingFrame", mainFrame)
-logFrame.Size = UDim2.new(1, -10, 1, -25) -- Padding nhỏ
-logFrame.Position = UDim2.new(0, 5, 0, 20)
-logFrame.BackgroundTransparency = 1
-logFrame.BorderSizePixel = 0
-logFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-logFrame.ScrollBarThickness = 3
-
-local logLayout = Instance.new("UIListLayout", logFrame)
-logLayout.SortOrder = Enum.SortOrder.LayoutOrder
-logLayout.Padding = UDim.new(0, 1)
--------------------------------------------------------------
-
--- //////////////// HÀM IN LOG RA GUI ////////////////
-function customLog(message)
-    print(message) -- Vẫn in ra F9 để debug
-    if not (_G.DarcyFarmControl.GUI and _G.DarcyFarmControl.GUI.Parent) then return end -- Kiểm tra GUI còn tồn tại không
-    local newLog = Instance.new("TextLabel", logFrame); newLog.Text = "  " .. message; newLog.TextColor3 = Color3.fromRGB(220, 220, 220); newLog.Font = Enum.Font.SourceSans; newLog.TextSize = 12; newLog.TextXAlignment = Enum.TextXAlignment.Left; newLog.BackgroundTransparency = 1; newLog.Size = UDim2.new(1, 0, 0, 16); newLog.LayoutOrder = -tick()
-    if #logFrame:GetChildren() > _G.DarcyFarmControl.MaxLogs + 1 then local oldestLog; local maxLayoutOrder = -math.huge; for _, child in pairs(logFrame:GetChildren()) do if child:IsA("TextLabel") and child.LayoutOrder > maxLayoutOrder then maxLayoutOrder = child.LayoutOrder; oldestLog = child end end; if oldestLog then oldestLog:Destroy() end end
-    logFrame.CanvasPosition = Vector2.new(0,0) -- Tự cuộn lên đầu
-end
--------------------------------------------------------------
-
--- //////////////// KHỞI TẠO TRẠNG THÁI VÀ CÁC HÀM KHÁC ////////////////
-local farmState = { LobbyAction = "NeedsToCreate", InMatch = false }
-local function waitgameisloaded() customLog("⏳ Chờ game tải..."); if not game:IsLoaded() then game.Loaded:Wait() end; wait(3); customLog("✅ Game đã tải!") end
-local function handleDialogues() customLog("🔎 Kiểm tra hội thoại..."); local playerGui=game:GetService("Players").LocalPlayer.PlayerGui; local DialogueEvent=game:GetService("ReplicatedStorage").Networking.State.DialogueEvent; local dialogueFound=false; local okayButton=playerGui:FindFirstChild("Dialogue",true) and playerGui.Dialogue:FindFirstChild("Dialogue",true) and playerGui.Dialogue.Dialogue:FindFirstChild("Options",true) and playerGui.Dialogue.Dialogue.Options:FindFirstChild("Option1",true) and playerGui.Dialogue.Dialogue.Options.Option1:FindFirstChild("Okay!"); if okayButton and okayButton.Parent then dialogueFound=true; customLog("✅ Xử lý 'Okay!'..."); pcall(function() DialogueEvent:FireServer("Interact", {"StarterUnitDialogue", 1, "Okay!"}) end); wait(8) end; local yeahButton=playerGui:FindFirstChild("Dialogue",true) and playerGui.Dialogue:FindFirstChild("Dialogue",true) and playerGui.Dialogue.Dialogue:FindFirstChild("Options",true) and playerGui.Dialogue.Dialogue.Options:FindFirstChild("Option1",true) and playerGui.Dialogue.Dialogue.Options.Option1:FindFirstChild("Yeah!"); if yeahButton and yeahButton.Parent then dialogueFound=true; customLog("✅ Xử lý 'Yeah!'..."); pcall(function() DialogueEvent:FireServer("Interact", {"StarterUnitDialogue", 2, "Yes!"}) end) else if dialogueFound then warn("⚠️ Không thấy hội thoại 'Yeah!'.") end end; return dialogueFound end
-local function claimNewPlayerReward() customLog("🔎 Kiểm tra phần thưởng..."); pcall(function() local dayIndicatorPath=game:GetService("Players").LocalPlayer.PlayerGui.NewPlayers.Holder.TopRewards.SmallTemplate.SmallTemplate.Main.Day; if dayIndicatorPath then customLog("🎁 Nhận thưởng ngày 1..."); local remote=game:GetService("ReplicatedStorage").Networking.NewPlayerRewardsEvent; remote:FireServer("Claim", 1); customLog("✅ Đã nhận."); wait(3) end end) end
-local function selectStartingUnit_Roku() customLog("📌 Chọn unit 'Roku'..."); pcall(function() local remote=game:GetService("ReplicatedStorage").Networking.Units.UnitSelectionEvent; remote:FireServer("Select", "Roku"); customLog("✅ Đã chọn.") end) end
-local function checkAndEquipUnits() customLog("🛡️ Trang bị units..."); local success, err = pcall(function() local EquipEvent = game:GetService("ReplicatedStorage").Networking.Units.EquipEvent; local ROKU_EQUIP_ID = "f7d74383-6d36-4dfc-99f5-17a8455b1db6"; local ACKER_EQUIP_ID = "12c3a768-6677-4436-8ab2-5fcd895c3cd1"; EquipEvent:FireServer("Equip", ROKU_EQUIP_ID); customLog("⬆️ Gửi equip Roku."); wait(0.7); EquipEvent:FireServer("Equip", ACKER_EQUIP_ID); customLog("⬆️ Gửi equip Acker."); wait(0.7); customLog("✅ Xong trang bị.") end); if not success then warn("⚠️ Lỗi trang bị:", err) end end
+-- //////////////// KHỞI TẠO TRẠNG THÁI VÀ CÁC HÀM ////////////////
+-- Trạng thái Lobby: NeedsCheck, Rejoining, NeedsPostRejoinSetup, NeedsMatchStart, WaitingForTeleport
+local farmState = { LobbyAction = "NeedsCheck", InMatch = false }
+local function waitgameisloaded() print("⏳ Chờ game tải..."); if not game:IsLoaded() then game.Loaded:Wait() end; wait(3); print("✅ Game đã tải!") end
+local function claimNewPlayerReward() print("🔎 Kiểm tra phần thưởng..."); pcall(function() local dayIndicatorPath=game:GetService("Players").LocalPlayer.PlayerGui.NewPlayers.Holder.TopRewards.SmallTemplate.SmallTemplate.Main.Day; if dayIndicatorPath then print("🎁 Nhận thưởng ngày 1..."); local remote=game:GetService("ReplicatedStorage").Networking.NewPlayerRewardsEvent; remote:FireServer("Claim", 1); print("✅ Đã nhận.") end end) end
+local function selectStartingUnit_Roku() print("📌 Chọn unit 'Roku'..."); pcall(function() local remote=game:GetService("ReplicatedStorage").Networking.Units.UnitSelectionEvent; remote:FireServer("Select", "Roku"); print("✅ Đã chọn.") end) end
+local function getEquipIdByName(unitDisplayName) print("   🔎 Tìm ID:", unitDisplayName); local equipId=nil; local s,e=pcall(function() local f=game:GetService("Players").LocalPlayer.PlayerGui.Windows.Units.Holder.Main.Units; for _,u in ipairs(f:GetChildren()) do if u:IsA("Frame") and string.match(u.Name,"^%x%x%x%x%x%x%x%x%-%x%x%x%x%-") then local l=u:FindFirstChild("Holder",true) and u.Holder:FindFirstChild("Main",true) and u.Holder.Main:FindFirstChild("UnitName",true); if l and l:IsA("TextLabel") then local n=string.match(l.Text,"^[^(]+"); if n and string.lower(string.gsub(n,"%s+$",""))==string.lower(unitDisplayName) then equipId=u.Name; print("      ✅ ID:",equipId); break end end end end end); if not s then warn("Lỗi quét GUI:",e) elseif not equipId then warn("⚠️ Không thấy ID.") end; return equipId end
+local function checkAndEquipUnits() print("🛡️ Trang bị units..."); local s,e=pcall(function() local E=game:GetService("ReplicatedStorage").Networking.Units.EquipEvent; local rID=getEquipIdByName("Roku"); local aID=getEquipIdByName("Ackers"); if rID then local args={[1]="Equip",[2]=rID}; E:FireServer(unpack(args)); print("⬆️ Gửi equip Roku."); wait(2) else print("❌ Không thấy ID Roku.") end; if aID then local args={[1]="Equip",[2]=aID}; E:FireServer(unpack(args)); print("⬆️ Gửi equip Acker."); wait(1) else print("❌ Không thấy ID Acker.") end; print("✅ Xong trang bị.") end); if not s then warn("⚠️ Lỗi trang bị:",e) end end
+local function handleDialogues() print("🔎 Kiểm tra hội thoại..."); local playerGui=game:GetService("Players").LocalPlayer.PlayerGui; local DialogueEvent=game:GetService("ReplicatedStorage").Networking.State.DialogueEvent; local dialogueFound=false; local okayButton=playerGui:FindFirstChild("Dialogue",true) and playerGui.Dialogue:FindFirstChild("Dialogue",true) and playerGui.Dialogue.Dialogue:FindFirstChild("Options",true) and playerGui.Dialogue.Dialogue.Options:FindFirstChild("Option1",true) and playerGui.Dialogue.Dialogue.Options.Option1:FindFirstChild("Okay!"); if okayButton and okayButton.Parent then dialogueFound=true; print("✅ Xử lý 'Okay!'..."); pcall(function() DialogueEvent:FireServer("Interact", {"StarterUnitDialogue", 1, "Okay!"}) end); wait(8) end; local yeahButton=playerGui:FindFirstChild("Dialogue",true) and playerGui.Dialogue:FindFirstChild("Dialogue",true) and playerGui.Dialogue.Dialogue:FindFirstChild("Options",true) and playerGui.Dialogue.Dialogue.Options:FindFirstChild("Option1",true) and playerGui.Dialogue.Dialogue.Options.Option1:FindFirstChild("Yeah!"); if yeahButton and yeahButton.Parent then dialogueFound=true; print("✅ Xử lý 'Yeah!'..."); pcall(function() DialogueEvent:FireServer("Interact", {"StarterUnitDialogue", 2, "Yes!"}) end); wait(1) else if dialogueFound then warn("⚠️ Không thấy hội thoại 'Yeah!'.") end end; return dialogueFound end
+local function rejoinCurrentServer() print("🔄 Rejoining server..."); pcall(function() local TS=game:GetService("TeleportService"); local Plrs=game:GetService("Players"); TS:TeleportToPlaceInstance(game.PlaceId, game.JobId, Plrs.LocalPlayer) end) end
+local function enableAllSettings() print("-----------------------------------"); print("⚙️ Kiểm tra cài đặt..."); local s,e=pcall(function() local sf=game:GetService("Players").LocalPlayer.PlayerGui.Settings.Holder.Gameplay; local ste={["Auto Skip Waves"]="AutoSkipWaves",["Select Unit on Placement"]="SelectUnitOnPlacement",["Show Multipliers on Hover"]="ShowMultipliersOnHover",["Disable Match End Rewards View"]="DisableMatchEndRewardsView",["Show Max Range on Placement"]="ShowMaxRangeOnPlacement",["Low Detail Mode"]="LowDetailMode",["Disable Camera Shake"]="DisableCameraShake",["Disable Depth of Field"]="DisableDepthOfField",["Hide Familiars"]="HideFamiliars"}; local SE=game:GetService("ReplicatedStorage").Networking.Settings.SettingsEvent; for gn,rn in pairs(ste) do local b=sf:FindFirstChild(gn); if b then if b.GuiState~=Enum.GuiState.Idle then print("❌ '"..gn.."' TẮT. Bật..."); SE:FireServer("Toggle",rn) else print("✅ '"..gn.."' đã BẬT.") end else warn("⚠️ Không thấy nút: '"..gn.."'") end; wait(0.2) end end); if not s then warn("‼️ Lỗi bật cài đặt:",e) end; print("⚙️ Xong kiểm tra cài đặt.") end
+local function forceSkipWaveLoop() print("background: ⏩ Ép Skip Wave bắt đầu..."); local SkipEvent=game:GetService("ReplicatedStorage").Networking.SkipWaveEvent; local playerGui=game:GetService("Players").LocalPlayer.PlayerGui; while _G.DarcyFarmIsRunning and game.PlaceId==MATCH_PLACE_ID do pcall(function() local sg=playerGui:FindFirstChild("SkipWave"); if sg and sg.Parent and sg.Visible then SkipEvent:FireServer("Skip") end end); wait(5) end; print("background: ⏩ Ép Skip Wave kết thúc.") end
 
 local LOBBY_PLACE_ID = 16146832113; local MATCH_PLACE_ID = 16277809958
-customLog("🟢 Script đã kích hoạt!")
-waitgameisloaded()
+print("🟢 Script 'Tàng Hình' đã kích hoạt!"); waitgameisloaded()
 
 -- ##################################################################
 -- #                     VÒNG LẶP CHÍNH CỦA SCRIPT                  #
 -- ##################################################################
-while _G.DarcyFarmControl.State == "Running" do -- Thay đổi điều kiện dừng
+while _G.DarcyFarmIsRunning do
     local currentPlaceId = game.PlaceId
     if currentPlaceId == LOBBY_PLACE_ID then
         farmState.InMatch = false
-        if farmState.LobbyAction == "NeedsToCreate" then
-            farmState.LobbyAction = "WaitingForTeleport"; customLog("🏠 Đang ở Lobby...")
+        
+        -- << LOGIC LOBBY MỚI VỚI CÁC TRẠNG THÁI >>
+        if farmState.LobbyAction == "NeedsCheck" then
+            print("🏠 Đang ở Lobby (Trạng thái: Kiểm tra)...")
             local isNewPlayer = handleDialogues()
             if isNewPlayer then
-                customLog("✨ Luồng người chơi mới...")
-                customLog("⏳ Chờ 5s..."); wait(5); selectStartingUnit_Roku()
-                customLog("⏳ Chờ 5s..."); wait(5); claimNewPlayerReward()
-                checkAndEquipUnits(); customLog("⏳ Chờ 5s..."); wait(5)
+                print("✨ Phát hiện luồng người chơi mới. Chọn unit và chuẩn bị rejoin...")
+                selectStartingUnit_Roku()
+                farmState.LobbyAction = "Rejoining" -- Chuyển trạng thái
+                wait(2)
+                rejoinCurrentServer() -- Thực hiện rejoin
+                wait(15) -- Chờ đợi (dù script có thể đã bị dừng)
             else
-                customLog("🔄 Người chơi cũ."); checkAndEquipUnits(); wait(2)
+                print("🔄 Người chơi cũ hoặc sau rejoin. Chuyển sang Setup...")
+                farmState.LobbyAction = "NeedsPostRejoinSetup" -- Chuyển thẳng sang bước setup
             end
-            customLog("➡️ Tạo trận..."); pcall(function() local lobbyEvent = game:GetService("ReplicatedStorage").Networking.LobbyEvent; local addMatchArgs = { [1] = "AddMatch", [2] = { ["Difficulty"] = "Normal", ["Act"] = "Act1", ["StageType"] = "Story", ["Stage"] = "Stage1", ["FriendsOnly"] = false } }; lobbyEvent:FireServer(unpack(addMatchArgs)); customLog("➕ Đã tạo trận."); wait(3); lobbyEvent:FireServer("StartMatch"); customLog("🚀 Đã bắt đầu trận!") end)
+            
+        elseif farmState.LobbyAction == "NeedsPostRejoinSetup" then
+            print("🔧 Đang ở Lobby (Trạng thái: Setup sau rejoin). Nhận thưởng và trang bị...")
+            claimNewPlayerReward()
+            wait(5) -- Chờ sau khi nhận thưởng
+            checkAndEquipUnits()
+            wait(5) -- Chờ sau khi trang bị
+            farmState.LobbyAction = "NeedsMatchStart" -- Chuyển sang bước tạo trận
+            
+        elseif farmState.LobbyAction == "NeedsMatchStart" then
+            print("➡️ Chuẩn bị tạo trận..."); 
+            pcall(function() local lobbyEvent = game:GetService("ReplicatedStorage").Networking.LobbyEvent; local addMatchArgs = { [1] = "AddMatch", [2] = { ["Difficulty"] = "Normal", ["Act"] = "Act1", ["StageType"] = "Story", ["Stage"] = "Stage1", ["FriendsOnly"] = false } }; lobbyEvent:FireServer(unpack(addMatchArgs)); print("➕ Đã tạo trận."); wait(3); lobbyEvent:FireServer("StartMatch"); print("🚀 Đã bắt đầu trận!") end)
+            farmState.LobbyAction = "WaitingForTeleport" -- Chuyển sang chờ dịch chuyển
+            
+        elseif farmState.LobbyAction == "WaitingForTeleport" then
+            print("⏳ Đang chờ dịch chuyển...")
+            
+        elseif farmState.LobbyAction == "Rejoining" then
+             print("⏳ Đang trong quá trình Rejoining...")
+             wait(5) 
         end
-    elseif currentPlaceId == MATCH_PLACE_ID and not farmState.InMatch then
-        farmState.InMatch = true; customLog("⚔️ Đã vào trận.")
-        local hasCompletedFirstRun = false
-        customLog("⏳ Chờ 20 giây..."); wait(20)
-        
-        while currentPlaceId == MATCH_PLACE_ID and _G.DarcyFarmControl.State == "Running" do
-            customLog("🔥 Bắt đầu lượt chơi mới...")
-            spawn(function() pcall(function() local skipWaveGui = game.Players.LocalPlayer.PlayerGui:WaitForChild("SkipWave", 45); if skipWaveGui and skipWaveGui.Parent and skipWaveGui:FindFirstChild("Holder") and skipWaveGui.Holder:FindFirstChild("Yes") then game:GetService("ReplicatedStorage").Networking.SkipWaveEvent:FireServer("Skip") end end) end)
-            customLog("⏳ Chờ 3 giây..."); wait(3)
+
+    elseif currentPlaceId == MATCH_PLACE_ID then
+        if not farmState.InMatch then
+             farmState.InMatch = true; print("⚔️ Đã vào trận. Bắt đầu VÒNG LẶP FARM VÔ HẠN.")
+             enableAllSettings()
+             spawn(forceSkipWaveLoop) 
+             local hasCompletedFirstRun = false
+             print("⏳ Chờ 20 giây..."); wait(20)
+        end
+        while currentPlaceId == MATCH_PLACE_ID and _G.DarcyFarmIsRunning do
+            print("-----------------------------------"); print("🔥 Bắt đầu lượt chơi mới...")
+            -- Bỏ spawn() cho SkipWave ở đây vì đã có forceSkipWaveLoop chạy nền
+            print("⏳ Chờ 3 giây..."); wait(3)
             do -- Khối logic đặt và nâng cấp unit
                 local unitState = { isRokuPlaced = false, isAckerPlaced = false, ackerUpgradeLevel = 0 }; local ACKER_INSTANCE = nil; local ROKU_COST = 400; local ACKER_COST = 1000; local ACKER_UPGRADES = { [1] = 2400, [2] = 3600, [3] = 5200 }; local ROKU_POSITION = Vector3.new(431.536, 4.840, -358.474); local ACKER_POSITION = Vector3.new(445.913, 3.529, -345.790); local UnitEvent = game:GetService("ReplicatedStorage").Networking.UnitEvent
                 local function getCurrentMoney() local moneyAmount=0; pcall(function() local lbl=game:GetService("Players").LocalPlayer.PlayerGui.Hotbar.Main.Yen; local str=string.gsub(lbl.Text,"[^%d]",""); moneyAmount=tonumber(str) or 0 end); return moneyAmount end
-                local function getUnitInstanceAtPosition(position) local unitsFolder = workspace:FindFirstChild("Units"); if not unitsFolder then return nil end; for _, unit in ipairs(unitsFolder:GetChildren()) do local unitRoot = unit:FindFirstChild("HumanoidRootPart") or unit.PrimaryPart; if unitRoot and (unitRoot.Position - position).Magnitude < 1 then customLog("✅ 'Săn' ID Acker: "..unit.Name); return unit end end; return nil end
-                while unitState.ackerUpgradeLevel < 3 and _G.DarcyFarmControl.State == "Running" and currentPlaceId == MATCH_PLACE_ID do
+                local function getUnitInstanceAtPosition(position) local unitsFolder = workspace:FindFirstChild("Units"); if not unitsFolder then return nil end; for _, unit in ipairs(unitsFolder:GetChildren()) do local unitRoot = unit:FindFirstChild("HumanoidRootPart") or unit.PrimaryPart; if unitRoot and (unitRoot.Position - position).Magnitude < 1 then print("✅ 'Săn' ID Acker: "..unit.Name); return unit end end; return nil end
+                while unitState.ackerUpgradeLevel < 3 and _G.DarcyFarmIsRunning and currentPlaceId == MATCH_PLACE_ID do
                     local currentMoney = getCurrentMoney()
-                    if not unitState.isRokuPlaced and currentMoney >= ROKU_COST then customLog(string.format("💰 (%d/%d) Đặt Roku...", currentMoney, ROKU_COST)); UnitEvent:FireServer("Render", {"Roku", 41, ROKU_POSITION, 0}); unitState.isRokuPlaced = true
-                    elseif unitState.isRokuPlaced and not unitState.isAckerPlaced and currentMoney >= ACKER_COST then customLog(string.format("💰 (%d/%d) Đặt Acker...", currentMoney, ACKER_COST)); UnitEvent:FireServer("Render", {"Ackers", 241, ACKER_POSITION, 0}); unitState.isAckerPlaced = true; wait(1.5); ACKER_INSTANCE = getUnitInstanceAtPosition(ACKER_POSITION)
+                    if not unitState.isRokuPlaced and currentMoney >= ROKU_COST then print(string.format("💰 (%d/%d) Đặt Roku...", currentMoney, ROKU_COST)); UnitEvent:FireServer("Render", {"Roku", 41, ROKU_POSITION, 0}); unitState.isRokuPlaced = true
+                    elseif unitState.isRokuPlaced and not unitState.isAckerPlaced and currentMoney >= ACKER_COST then print(string.format("💰 (%d/%d) Đặt Acker...", currentMoney, ACKER_COST)); UnitEvent:FireServer("Render", {"Ackers", 241, ACKER_POSITION, 0}); unitState.isAckerPlaced = true; wait(1.5); ACKER_INSTANCE = getUnitInstanceAtPosition(ACKER_POSITION)
                     elseif ACKER_INSTANCE and unitState.ackerUpgradeLevel < 3 then
                         local nextUpgradeLevel = unitState.ackerUpgradeLevel + 1; local upgradeCost = ACKER_UPGRADES[nextUpgradeLevel]
-                        if currentMoney >= upgradeCost then customLog(string.format("💰 (%d/%d) Nâng cấp Acker #%d...", currentMoney, upgradeCost, nextUpgradeLevel)); UnitEvent:FireServer("Upgrade", ACKER_INSTANCE.Name); unitState.ackerUpgradeLevel = nextUpgradeLevel end
+                        if currentMoney >= upgradeCost then print(string.format("💰 (%d/%d) Nâng cấp Acker #%d...", currentMoney, upgradeCost, nextUpgradeLevel)); UnitEvent:FireServer("Upgrade", ACKER_INSTANCE.Name); unitState.ackerUpgradeLevel = nextUpgradeLevel end
                     end; wait(0.5); currentPlaceId = game.PlaceId
-                end; customLog("✅ Xong đặt/nâng cấp.")
+                end; print("✅ Xong đặt/nâng cấp.")
             end
             
+            -- <<<< PHẦN LOGIC CUỐI TRẬN "LAI" >>>>
             if not hasCompletedFirstRun then
-                customLog("⏳ (Lượt đầu) Chờ RewardsDisplay...")
+                print("⏳ (Lượt đầu) Chờ RewardsDisplay...")
                 local rewardsDisplay = game.Players.LocalPlayer.PlayerGui:WaitForChild("RewardsDisplay", 1200)
-                if rewardsDisplay and rewardsDisplay.Parent and _G.DarcyFarmControl.State == "Running" then customLog("🏆 Gửi Retry..."); wait(1); pcall(function() game:GetService("ReplicatedStorage").Networking.EndScreen.VoteEvent:FireServer("Retry"); customLog("🔄 Đã Retry!") end); hasCompletedFirstRun = true; wait(5)
-                else customLog("❌ Không thấy màn hình thưởng."); break end
+                if rewardsDisplay and rewardsDisplay.Parent and _G.DarcyFarmIsRunning then print("🏆 Gửi Retry..."); wait(1); pcall(function() game:GetService("ReplicatedStorage").Networking.EndScreen.VoteEvent:FireServer("Retry"); print("🔄 Đã Retry!") end); hasCompletedFirstRun = true; wait(5)
+                else print("❌ Không thấy màn hình thưởng."); break end
             else
-                customLog("⏳ (Lượt sau) Chờ EndScreen...")
-                local endScreenGui; while _G.DarcyFarmControl.State == "Running" and not (endScreenGui and endScreenGui.Parent) do endScreenGui = game.Players.LocalPlayer.PlayerGui:FindFirstChild("EndScreen"); wait(0.5) end
-                if _G.DarcyFarmControl.State == "Running" and endScreenGui then
-                    local holder = endScreenGui:FindFirstChild("Holder"); if holder and holder:FindFirstChild("Buttons") and holder.Buttons:FindFirstChild("Retry") then customLog("✅ Thấy nút Retry! Gửi Retry..."); wait(3); pcall(function() game:GetService("ReplicatedStorage").Networking.EndScreen.VoteEvent:FireServer("Retry"); customLog("🔄 Đã Retry!") end); wait(5)
-                    else customLog("❌ Không thấy nút Retry."); break end
-                else customLog("❌ Không thấy EndScreen."); break end
+                print("⏳ (Lượt sau) Chờ EndScreen...")
+                local endScreenGui; while _G.DarcyFarmIsRunning and not (endScreenGui and endScreenGui.Parent) do endScreenGui = game.Players.LocalPlayer.PlayerGui:FindFirstChild("EndScreen"); wait(0.5) end
+                if _G.DarcyFarmIsRunning and endScreenGui then
+                    local holder = endScreenGui:FindFirstChild("Holder"); if holder and holder:FindFirstChild("Buttons") and holder.Buttons:FindFirstChild("Retry") then print("✅ Thấy nút Retry! Gửi Retry..."); wait(3); pcall(function() game:GetService("ReplicatedStorage").Networking.EndScreen.VoteEvent:FireServer("Retry"); print("🔄 Đã Retry!") end); wait(5)
+                    else print("❌ Không thấy nút Retry."); break end
+                else print("❌ Không thấy EndScreen."); break end
             end
             currentPlaceId = game.PlaceId
         end
-        customLog("🚪 Thoát vòng lặp farm nội bộ."); farmState.LobbyAction = "NeedsToCreate"
+        print("🚪 Thoát vòng lặp farm nội bộ."); 
+        farmState.LobbyAction = "NeedsCheck" -- Reset về trạng thái kiểm tra ban đầu
+        
     end
-    wait(2)
+    wait(2) -- Vòng lặp chính chờ 2 giây
 end
-customLog("⏹️ Script đã dừng.")
-if _G.DarcyFarmControl.GUI and _G.DarcyFarmControl.GUI.Parent then _G.DarcyFarmControl.GUI:Destroy() end
+print("⏹️ Script đã dừng hẳn theo lệnh.")
